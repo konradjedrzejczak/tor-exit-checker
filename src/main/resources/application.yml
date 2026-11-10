@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: tor-exit-checker
+
+tor:
+  exit-list:
+    url: https://check.torproject.org/exit-addresses
+    cache-ttl: PT30M       # how long a downloaded list is used before downloading a new one
+    check-interval: PT1M   # how often the background job checks whether the TTL has passed (or a retry is needed)
+    connect-timeout: PT5S
+    read-timeout: PT20S
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health    # only /actuator/health is exposed
+  endpoint:
+    health:
+      show-details: always
