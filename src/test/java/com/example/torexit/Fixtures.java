@@ -1,5 +1,8 @@
 package com.example.torexit;
 
+import java.net.URI;
+import java.time.Duration;
+
 /** Test data shared between test classes. All addresses come from the documentation ranges (RFC 5737). */
 final class Fixtures {
 
@@ -26,5 +29,12 @@ final class Fixtures {
 
     static Ipv4Address ip(String text) {
         return Ipv4Address.parse(text);
+    }
+
+    /** Valid settings, with the given cache TTL. */
+    static TorExitProperties properties(Duration cacheTtl) {
+        return new TorExitProperties(
+                URI.create("http://localhost/exit-addresses"), cacheTtl,
+                Duration.ofMinutes(1), Duration.ofSeconds(5), Duration.ofSeconds(20));
     }
 }

@@ -26,7 +26,7 @@ class ExitNodeServiceTest {
             throw new IllegalStateException("Tor Project is down");
         }
         return response;
-    }, clock, TTL);
+    }, clock, Fixtures.properties(TTL));
 
     @Test
     void cannotAnswerBeforeTheFirstDownload() {

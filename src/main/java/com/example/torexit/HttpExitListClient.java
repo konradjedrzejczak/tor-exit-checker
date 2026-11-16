@@ -1,7 +1,6 @@
 package com.example.torexit;
 
-import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
+import java.net.URI;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -11,18 +10,16 @@ import org.springframework.web.client.RestClient;
 class HttpExitListClient implements ExitListClient {
 
     private final RestClient restClient;
-    private final String url;
+    private final URI url;
 
-    HttpExitListClient(@Value("${tor.exit-list.url}") String url,
-                       @Value("${tor.exit-list.connect-timeout}") Duration connectTimeout,
-                       @Value("${tor.exit-list.read-timeout}") Duration readTimeout) {
+    HttpExitListClient(TorExitProperties properties) {
         // Without timeouts a hanging server would block the refresh forever.
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(connectTimeout);
-        requestFactory.setReadTimeout(readTimeout);
+        requestFactory.setConnectTimeout(properties.connectTimeout());
+        requestFactory.setReadTimeout(properties.readTimeout());
 
         this.restClient = RestClient.builder().requestFactory(requestFactory).build();
-        this.url = url;
+        this.url = properties.url();
     }
 
     @Override

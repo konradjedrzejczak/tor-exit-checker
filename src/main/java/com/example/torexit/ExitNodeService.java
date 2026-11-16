@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -37,10 +36,10 @@ public class ExitNodeService {
     // and request threads always see either the old or the new one, never a half-updated state.
     private volatile Cache cache;
 
-    public ExitNodeService(ExitListClient client, Clock clock, @Value("${tor.exit-list.cache-ttl}") Duration cacheTtl) {
+    public ExitNodeService(ExitListClient client, Clock clock, TorExitProperties properties) {
         this.client = client;
         this.clock = clock;
-        this.cacheTtl = cacheTtl;
+        this.cacheTtl = properties.cacheTtl();
     }
 
     @Scheduled(fixedDelayString = "${tor.exit-list.check-interval}") // first run is right at start-up
