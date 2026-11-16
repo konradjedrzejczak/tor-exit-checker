@@ -23,8 +23,10 @@ Health check: `GET /actuator/health` (`UP` once an exit list is loaded).
 
 ## Assumptions
 
-- **Only IPv4.** Anything else (IPv6, hostnames, CIDR, `1.2.3`, `01.2.3.4`) gets `400`. The check is a strict regex;
-  leading zeros are rejected because some systems read them as octal.
+- **Only IPv4.** Anything else (IPv6, hostnames, CIDR, `1.2.3`, `01.2.3.4`) gets `400`. Parsing is done by Guava
+  (`InetAddresses`, which never does a DNS lookup) and an `Ipv4Address` type guarantees one canonical text form.
+  Leading zeros are rejected because some systems read them as octal.
+- **`HEAD` is answered by the `GET` handler;** Spring does that automatically and the web server leaves out the body.
 - **Exit node = the address appears in an `ExitAddress` line** of the Tor Project's list.
 - **Caching:** the list is kept in memory and downloaded again after `cache-ttl` (default 30 minutes). A background
   job does this, so a request never waits for the Tor Project.
@@ -38,9 +40,23 @@ Health check: `GET /actuator/health` (`UP` once an exit list is loaded).
 
 - Java 21, Maven
 - Spring Boot 3.5: Spring Web (REST), Actuator (health check), `@Scheduled` (background refresh)
-- `RestClient` for the download
-- JUnit 5, AssertJ, Mockito, MockMvc for tests
+- `RestClient` for the download, Guava for IP address parsing
+- JUnit 5, AssertJ, Mockito, MockMvc for tests; the JDK's built-in `HttpServer` as a fake Tor Project
 - Docker (multi-stage build)
+
+### Structure
+
+All classes are in one package, `com.example.torexit`:
+
+| Class | Responsibility |
+|---|---|
+| `ExitNodeController` | `GET`/`HEAD /{ip}`: validates the address, asks the registry, picks the status code |
+| `Ipv4Address` | a valid IPv4 address (created only through `parse`/`tryParse`) |
+| `ExitNodeRegistry` | holds the current list in memory and answers lookups |
+| `ExitListRefresher` | scheduled job; decides when the list must be downloaded again (TTL) and keeps the old list on failure |
+| `ExitListLoader` | downloads (`ExitListClient`) and parses (`ExitListParser`) the list; fails if it contains no addresses |
+| `TorExitProperties` | typed, validated settings (`tor.exit-list.*`) |
+| `TorExitListHealthIndicator` | health check: `UP` once a list is loaded |
 
 ## How to
 
@@ -58,6 +74,9 @@ docker build -t tor-exit-checker .   # builds the Docker image
 ```console
 mvn test
 ```
+
+This runs unit tests, controller tests with MockMvc, and end-to-end tests that start the real application and
+call it over HTTP, with a small local server in place of the Tor Project.
 
 **Run locally**
 
