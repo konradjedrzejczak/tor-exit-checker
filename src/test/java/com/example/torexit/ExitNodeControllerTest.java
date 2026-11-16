@@ -20,7 +20,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Tests the HTTP layer only; the registry is replaced by a mock. */
+/**
+ * Tests the HTTP layer only; the registry is replaced by a mock. HEAD requests are checked for their status
+ * only: leaving out the body is the web server's job, which MockMvc does not do. That part is covered by
+ * TorExitCheckerEndToEndTest, which talks to a real server.
+ */
 @WebMvcTest(ExitNodeController.class)
 class ExitNodeControllerTest {
 
