@@ -26,7 +26,7 @@ public class ExitNodeService {
     private static final Logger log = LoggerFactory.getLogger(ExitNodeService.class);
 
     /** The list together with the time it was downloaded. Never modified after creation. */
-    private record Cache(Set<String> addresses, Instant loadedAt) {
+    private record Cache(Set<Ipv4Address> addresses, Instant loadedAt) {
     }
 
     private final ExitListClient client;
@@ -51,7 +51,7 @@ public class ExitNodeService {
         }
 
         try {
-            Set<String> addresses = ExitListParser.parse(client.fetch());
+            Set<Ipv4Address> addresses = ExitListParser.parse(client.fetch());
             if (addresses.isEmpty()) {
                 // A real list is never empty; most likely we got an error page. Do not throw away a good list.
                 throw new IllegalStateException("downloaded list contains no exit addresses");
@@ -65,7 +65,7 @@ public class ExitNodeService {
     }
 
     /** @throws ExitListUnavailableException if the list has not been loaded yet */
-    public boolean isExitNode(String ip) {
+    public boolean isExitNode(Ipv4Address ip) {
         return loadedCache().addresses().contains(ip);
     }
 

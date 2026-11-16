@@ -21,15 +21,15 @@ final class ExitListParser {
     }
 
     /** Returns all valid IPv4 exit addresses. Other lines, and addresses that are not IPv4, are ignored. */
-    static Set<String> parse(String content) {
-        Set<String> addresses = new HashSet<>();
+    static Set<Ipv4Address> parse(String content) {
+        Set<Ipv4Address> addresses = new HashSet<>();
         if (content == null) {
             return addresses;
         }
         for (String line : content.lines().toList()) {
             String[] words = line.strip().split("\\s+");
-            if (words.length >= 2 && words[0].equals("ExitAddress") && Ipv4Validator.isValid(words[1])) {
-                addresses.add(words[1]);
+            if (words.length >= 2 && words[0].equals("ExitAddress")) {
+                Ipv4Address.tryParse(words[1]).ifPresent(addresses::add);
             }
         }
         return addresses;

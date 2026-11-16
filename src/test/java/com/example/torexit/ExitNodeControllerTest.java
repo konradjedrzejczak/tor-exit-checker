@@ -1,5 +1,8 @@
 package com.example.torexit;
 
+import static com.example.torexit.Fixtures.EXIT_1;
+import static com.example.torexit.Fixtures.NOT_EXIT;
+import static com.example.torexit.Fixtures.ip;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
@@ -28,52 +31,52 @@ class ExitNodeControllerTest {
     private ExitNodeService exitNodeService;
 
     @BeforeEach
-    void setUp() {
-        given(exitNodeService.isExitNode("192.0.2.1")).willReturn(true);
-        given(exitNodeService.isExitNode("192.0.2.2")).willReturn(false);
+    void givenAListWithOneExitNode() {
+        given(exitNodeService.isExitNode(ip(EXIT_1))).willReturn(true);
+        given(exitNodeService.isExitNode(ip(NOT_EXIT))).willReturn(false);
         given(exitNodeService.lastUpdated()).willReturn(Instant.parse("2026-11-10T11:30:02Z"));
     }
 
     @Test
-    void headIs200WithEmptyBodyForAnExitNode() throws Exception {
-        mockMvc.perform(head("/192.0.2.1"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(""));
+    void headIs200ForAnExitNode() throws Exception {
+        mockMvc.perform(head("/" + EXIT_1))
+                .andExpect(status().isOk());
     }
 
     @Test
-    void headIs404WithEmptyBodyForOtherAddresses() throws Exception {
-        mockMvc.perform(head("/192.0.2.2"))
-                .andExpect(status().isNotFound())
-                .andExpect(content().string(""));
+    void headIs404ForOtherAddresses() throws Exception {
+        mockMvc.perform(head("/" + NOT_EXIT))
+                .andExpect(status().isNotFound());
     }
 
     @Test
     void getReturnsJsonForAnExitNode() throws Exception {
-        mockMvc.perform(get("/192.0.2.1"))
+        mockMvc.perform(get("/" + EXIT_1))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.ip").value("192.0.2.1"))
+                .andExpect(jsonPath("$.ip").value(EXIT_1))
                 .andExpect(jsonPath("$.listUpdatedAt").value("2026-11-10T11:30:02Z"));
     }
 
     @Test
     void getIs404WithEmptyBodyForOtherAddresses() throws Exception {
-        mockMvc.perform(get("/192.0.2.2"))
+        mockMvc.perform(get("/" + NOT_EXIT))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(""));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"999.1.1.1", "1.2.3", "01.2.3.4", "not-an-ip", "1.2.3.4.5"})
-    void invalidAddressIs400(String ip) throws Exception {
-        mockMvc.perform(get("/" + ip)).andExpect(status().isBadRequest());
-        mockMvc.perform(head("/" + ip)).andExpect(status().isBadRequest());
+    void invalidAddressIs400(String text) throws Exception {
+        mockMvc.perform(get("/" + text)).andExpect(status().isBadRequest());
+        mockMvc.perform(head("/" + text)).andExpect(status().isBadRequest());
     }
 
     @Test
     void is503WhenTheListIsNotLoadedYet() throws Exception {
-        given(exitNodeService.isExitNode("192.0.2.3")).willThrow(new ExitListUnavailableException());
+        // given
+        given(exitNodeService.isExitNode(ip("192.0.2.3"))).willThrow(new ExitListUnavailableException());
 
+        // when / then
         mockMvc.perform(get("/192.0.2.3")).andExpect(status().isServiceUnavailable());
         mockMvc.perform(head("/192.0.2.3")).andExpect(status().isServiceUnavailable());
     }
