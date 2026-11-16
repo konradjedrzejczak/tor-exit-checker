@@ -17,19 +17,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ExitNodeController {
 
-    private final ExitNodeService exitNodeService;
+    private final ExitNodeRegistry registry;
 
-    public ExitNodeController(ExitNodeService exitNodeService) {
-        this.exitNodeService = exitNodeService;
+    public ExitNodeController(ExitNodeRegistry registry) {
+        this.registry = registry;
     }
 
     @GetMapping("/{ip}")
     public ResponseEntity<ExitNodeResponse> check(@PathVariable("ip") String text) {
         Ipv4Address ip = Ipv4Address.parse(text); // 400 if it is not a valid IPv4 address
-        if (!exitNodeService.isExitNode(ip)) {
+        if (!registry.isExitNode(ip)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(new ExitNodeResponse(ip.toString(), exitNodeService.lastUpdated()));
+        return ResponseEntity.ok(new ExitNodeResponse(ip.toString(), registry.lastUpdated()));
     }
 
     @RequestMapping(path = "/{ip}", method = RequestMethod.HEAD)

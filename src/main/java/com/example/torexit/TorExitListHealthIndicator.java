@@ -13,17 +13,17 @@ import org.springframework.stereotype.Component;
 @Component
 public class TorExitListHealthIndicator implements HealthIndicator {
 
-    private final ExitNodeService exitNodeService;
+    private final ExitNodeRegistry registry;
 
-    public TorExitListHealthIndicator(ExitNodeService exitNodeService) {
-        this.exitNodeService = exitNodeService;
+    public TorExitListHealthIndicator(ExitNodeRegistry registry) {
+        this.registry = registry;
     }
 
     @Override
     public Health health() {
-        if (!exitNodeService.isLoaded()) {
+        if (!registry.isLoaded()) {
             return Health.down().withDetail("reason", "exit list not loaded yet").build();
         }
-        return Health.up().withDetail("listUpdatedAt", exitNodeService.lastUpdated().toString()).build();
+        return Health.up().withDetail("listUpdatedAt", registry.lastUpdated().toString()).build();
     }
 }

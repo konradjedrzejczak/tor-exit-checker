@@ -20,7 +20,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Tests the HTTP layer only; the service is replaced by a mock. */
+/** Tests the HTTP layer only; the registry is replaced by a mock. */
 @WebMvcTest(ExitNodeController.class)
 class ExitNodeControllerTest {
 
@@ -28,13 +28,13 @@ class ExitNodeControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private ExitNodeService exitNodeService;
+    private ExitNodeRegistry registry;
 
     @BeforeEach
     void givenAListWithOneExitNode() {
-        given(exitNodeService.isExitNode(ip(EXIT_1))).willReturn(true);
-        given(exitNodeService.isExitNode(ip(NOT_EXIT))).willReturn(false);
-        given(exitNodeService.lastUpdated()).willReturn(Instant.parse("2026-11-10T11:30:02Z"));
+        given(registry.isExitNode(ip(EXIT_1))).willReturn(true);
+        given(registry.isExitNode(ip(NOT_EXIT))).willReturn(false);
+        given(registry.lastUpdated()).willReturn(Instant.parse("2026-11-10T11:30:02Z"));
     }
 
     @Test
@@ -74,7 +74,7 @@ class ExitNodeControllerTest {
     @Test
     void is503WhenTheListIsNotLoadedYet() throws Exception {
         // given
-        given(exitNodeService.isExitNode(ip("192.0.2.3"))).willThrow(new ExitListUnavailableException());
+        given(registry.isExitNode(ip("192.0.2.3"))).willThrow(new ExitListUnavailableException());
 
         // when / then
         mockMvc.perform(get("/192.0.2.3")).andExpect(status().isServiceUnavailable());

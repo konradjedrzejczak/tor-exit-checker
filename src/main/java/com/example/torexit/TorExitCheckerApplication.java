@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan // finds TorExitProperties
-@EnableScheduling // needed for @Scheduled in ExitNodeService
+@EnableScheduling // needed for @Scheduled in ExitListRefresher
 public class TorExitCheckerApplication {
 
     public static void main(String[] args) {
