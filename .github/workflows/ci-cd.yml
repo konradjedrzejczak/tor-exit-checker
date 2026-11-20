@@ -1,0 +1,131 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build and test
+        run: mvn -B verify
+      - name: Keep the test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: target/surefire-reports
+          if-no-files-found: ignore
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # lets the job request a short-lived OIDC token for AWS
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CLUSTER: tor-exit-checker
+      SERVICE: tor-exit-checker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-reports
+          path: reports
+
+      - name: Assume the AWS role (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Look up the AWS account id
+        run: echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_ENV"
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push the image
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/tor-exit-checker:${GITHUB_SHA}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Archive test reports and build info in S3
+        run: |
+          BUCKET="tor-exit-checker-artifacts-${ACCOUNT_ID}-${AWS_REGION}"
+          printf '{"commit":"%s","image":"%s","builtAt":"%s","run":"%s"}\n' \
+            "$GITHUB_SHA" "$IMAGE" "$(date -u +%FT%TZ)" "$GITHUB_RUN_ID" > reports/build-info.json
+          aws s3 cp reports "s3://${BUCKET}/builds/${GITHUB_SHA}/" --recursive
+
+      - name: Register the new task definition
+        run: |
+          sed -e "s|__IMAGE__|${IMAGE}|" \
+              -e "s|__REGION__|${AWS_REGION}|" \
+              -e "s|__EXECUTION_ROLE_ARN__|arn:aws:iam::${ACCOUNT_ID}:role/tor-exit-checker-ecs-execution|" \
+              deploy/task-definition.json > task-definition.rendered.json
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition.rendered.json \
+            --query taskDefinition.taskDefinitionArn --output text)
+          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> "$GITHUB_ENV"
+
+      - name: Create or update the ECS service
+        run: |
+          EXISTING=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query "services[?status=='ACTIVE'].serviceName" --output text)
+          if [ -z "$EXISTING" ]; then
+            # One instance and a fixed host port (80): the old task must stop before the new one starts,
+            # hence min healthy 0% / max 100%. The circuit breaker rolls back a task that never gets healthy.
+            aws ecs create-service --cluster "$CLUSTER" --service-name "$SERVICE" \
+              --task-definition "$TASK_DEF_ARN" --desired-count 1 --launch-type EC2 \
+              --deployment-configuration "minimumHealthyPercent=0,maximumPercent=100,deploymentCircuitBreaker={enable=true,rollback=true}"
+          else
+            aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --task-definition "$TASK_DEF_ARN"
+          fi
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+
+      - name: Smoke test the public API
+        run: |
+          IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=tor-exit-checker" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+          echo "Testing http://$IP"
+
+          for i in $(seq 1 24); do
+            if curl -fsS --max-time 5 "http://$IP/actuator/health"; then echo; break; fi
+            echo "health not ready yet ($i/24)"; sleep 5
+            if [ "$i" = 24 ]; then echo "health check never became UP"; exit 1; fi
+          done
+
+          expect() {  # expect <expected status> <path>
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$IP$2")
+            echo "GET $2 -> $code (expected $1)"
+            [ "$code" = "$1" ]
+          }
+          expect 404 /192.0.2.1        # documentation address, never a Tor exit
+          expect 400 /999.1.1.1        # not an IPv4 address
+
+          # A known exit relay; the Tor list changes, so this one only warns.
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$IP/171.25.193.25")
+          echo "GET /171.25.193.25 -> $code (200 expected while the relay is listed)"

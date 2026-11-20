@@ -51,7 +51,7 @@ class TorExitCheckerWithoutListEndToEndTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(response.status()).isEqualTo(503);
-            softly.assertThat(response.body()).contains("\"torExitList\":{\"status\":\"DOWN\"");
+            softly.assertThat(response.body()).isEqualTo("{\"status\":\"DOWN\"}");
         });
     }
 }
