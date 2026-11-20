@@ -102,3 +102,7 @@ start-up the service answers `503`, until the first download is done.
 | `tor.exit-list.cache-ttl` | `PT30M` | how long a downloaded list is used |
 | `tor.exit-list.check-interval` | `PT1M` | how often the job checks whether a download is due |
 | `tor.exit-list.connect-timeout` / `read-timeout` | `PT5S` / `PT20S` | HTTP timeouts |
+
+## Deployment
+
+The service can be deployed to AWS (ECS on EC2, ECR, S3) by GitHub Actions; see [deploy/README.md](deploy/README.md).
