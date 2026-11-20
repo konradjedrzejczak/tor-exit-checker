@@ -51,6 +51,11 @@ jobs:
         with:
           name: test-reports
           path: reports
+          
+      - name: Show OIDC subject (debug)
+        run: |
+          TOKEN=$(curl -sH ...
+          echo "$TOKEN" | jq ...
 
       - name: Assume the AWS role (OIDC, no stored keys)
         uses: aws-actions/configure-aws-credentials@v4
