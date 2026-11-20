@@ -217,7 +217,16 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:ref:refs/heads/${GitHubBranch}
+              # GitHub sends the subject either as repo:owner/name:ref:... or, for newer repositories, with numeric
+              # ids appended to the names (repo:owner@123/name@456:ref:...). Both forms are accepted; the owner,
+              # the repository name and the branch are still fixed, only the ids are wildcards.
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepo}:ref:refs/heads/${GitHubBranch}
+                  - !Sub
+                    - repo:${Owner}@*/${Name}@*:ref:refs/heads/${GitHubBranch}
+                    - Owner: !Select [0, !Split ["/", !Ref GitHubRepo]]
+                      Name: !Select [1, !Split ["/", !Ref GitHubRepo]]
       Policies:
         - PolicyName: deploy
           PolicyDocument:
@@ -231,6 +240,8 @@ Resources:
                 Effect: Allow
                 Action:
                   - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
                   - ecr:InitiateLayerUpload
                   - ecr:UploadLayerPart
                   - ecr:CompleteLayerUpload
