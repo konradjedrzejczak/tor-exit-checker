@@ -43,6 +43,7 @@ Health check: `GET /actuator/health` (`UP` once an exit list is loaded).
 - `RestClient` for the download, Guava for IP address parsing
 - JUnit 5, AssertJ, Mockito, MockMvc for tests; the JDK's built-in `HttpServer` as a fake Tor Project
 - Docker (multi-stage build)
+- GitHub Actions (CI/CD), AWS: ECS on EC2, ECR, S3, CloudFormation, IAM with OIDC, CloudWatch Logs
 
 ### Structure
 
@@ -103,6 +104,38 @@ start-up the service answers `503`, until the first download is done.
 | `tor.exit-list.check-interval` | `PT1M` | how often the job checks whether a download is due |
 | `tor.exit-list.connect-timeout` / `read-timeout` | `PT5S` / `PT20S` | HTTP timeouts |
 
-## Deployment
+## Deployment (AWS)
 
-The service can be deployed to AWS (ECS on EC2, ECR, S3) by GitHub Actions; see [deploy/README.md](deploy/README.md).
+Every push to `main` is tested, built into a Docker image and deployed to AWS by GitHub Actions
+(`.github/workflows/ci-cd.yml`). Pull requests only run the tests.
+
+```
+push to main ─► GitHub Actions: mvn verify ─► docker build ─► ECR (image tag = git SHA)
+                                   │                                  │
+                                   └─► S3: test reports, build info   ▼
+                              register task definition ─► ECS service (EC2 launch type)
+                                                              │
+                                              EC2 t3.micro + Elastic IP, port 80 ─► container :8080
+```
+
+| Service | What it is used for |
+|---|---|
+| EC2 | One `t3.micro` that runs the containers (an ECS container instance) |
+| ECS | Keeps the container running, replaces it on every deploy, restarts it when the health check fails |
+| ECR | Stores the Docker images (the last 5 are kept) |
+| S3 | Archive of test reports and build info per commit (`builds/<git sha>/`, removed after 30 days) |
+| IAM + OIDC | GitHub Actions gets short-lived credentials for one repository and one branch; no AWS keys are stored in GitHub |
+| CloudWatch Logs | Container logs (`/ecs/tor-exit-checker`) |
+
+Design choices:
+
+- **ECS on EC2, not Fargate:** a similar price for one small container, and a fixed Elastic IP without a load balancer.
+- **No load balancer, no NAT gateway:** one instance in a public subnet keeps the cost at roughly $15 a month.
+  The price is a short pause during a deployment (the old container must stop before the new one can use port 80)
+  and plain HTTP without a domain.
+- **Infrastructure as code:** everything except the ECS service is described in `deploy/infrastructure.yml`
+  (CloudFormation). The service is created by the workflow on the first deployment.
+- **Health check:** ECS runs `GET /actuator/health` inside the container; the workflow ends with a smoke test of the
+  public address (health is `UP`, `192.0.2.1` gives `404`, `999.1.1.1` gives `400`).
+
+Setup and removal steps are in [deploy/README.md](deploy/README.md).
